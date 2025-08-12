@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Angles Explorer — Interactive Canvas</title>
+  <style>
+    :root {
+      --bg1: #667eea;
+      --bg2: #764ba2;
+      --accent1: #f5576c;
+      --accent2: #ff0844;
+      --panel: rgba(255, 255, 255, 0.95);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+    .container {
+      width: min(920px, 100%);
+      background: var(--panel);
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      position: relative;
+      overflow: hidden;
+    }
+    h1 {
+      margin: 0 0 14px;
+      text-align: center;
+      color: var(--bg2);
+      font-size: clamp(1.6rem, 2.2vw + 1rem, 2.6rem);
+      letter-spacing: .3px;
+      animation: bounce 2s ease-in-out infinite;
+    }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .penguin { font-size: 42px; user-select: none; cursor: pointer; }
+    .penguin:hover { animation: waddle .6s ease-in-out infinite; }
+    @keyframes waddle { 0%,100%{transform:rotate(-5deg)} 50%{transform:rotate(5deg)} }
+
+    .penguin-speech {
+      position: absolute; top: 62px; right: 16px; background: #fff; border-radius: 12px; padding: 10px 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,.2); opacity: 0; pointer-events: none; transition: opacity .25s ease;
+      max-width: 220px; font-size: .95rem;
+    }
+    .penguin-speech.show { opacity: 1 }
+    .penguin-speech::before {
+      content: ""; position: absolute; top: -8px; right: 22px; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:8px solid #fff;
+    }
+
+    .canvas-wrap { position: relative; display: grid; place-items: center; margin: 12px 0 18px; }
+    canvas {
+      width: min(560px, 94vw);
+      height: min(560px, 94vw);
+      border-radius: 22px;
+      background: linear-gradient(145deg, #ffffff, #f0f4ff);
+      box-shadow: 20px 20px 60px #d1d5e0, -20px -20px 60px #ffffff, inset 0 0 0 3px rgba(102,126,234,.28);
+      touch-action: none; /* for Pointer events */
+      cursor: grab;
+      transition: transform .25s ease;
+    }
+    canvas.dragging { cursor: grabbing; transform: scale(1.02); }
+
+    .panel {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: #fff; border-radius: 18px; padding: 16px; text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,.2);
+      text-shadow: 0 1px 2px rgba(0,0,0,.35); /* improve white-on-pink readability */
+    }
+    .angle-display { font-weight: 800; font-size: clamp(1.2rem, 1vw + 1rem, 2rem); text-shadow: 2px 2px 4px rgba(0,0,0,.2); }
+    .angle-type { margin-top: 8px; font-size: 1.15rem; background: rgba(255,255,255,.22); border-radius: 12px; padding: 8px 10px; backdrop-filter: blur(6px); }
+    .desc { margin-top: 6px; opacity: .95 }
+
+    .controls { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    button, .chip {
+      background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
+      color: #fff; border: 0; border-radius: 999px; padding: 10px 16px; font: inherit; cursor: pointer;
+      box-shadow: 0 6px 16px rgba(0,0,0,.18); transition: transform .15s ease, box-shadow .2s ease;
+    }
+    button:hover, .chip:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.26); }
+
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; margin-top: 10px; }
+    label { font-size: .95rem; color: #333 }
+    input[type="range"] { width: min(420px, 90vw); }
+
+    .fun { background: #ffd93d; color: #333; border-radius: 14px; padding: 12px 14px; margin-top: 14px; text-align:center; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+
+    .sr-live { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+      .center-penguin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(48px, 9vw, 90px); line-height: 1; filter: drop-shadow(0 6px 14px rgba(0,0,0,.25)); user-select: none; pointer-events: none; z-index: 5; animation: penguinBlink 3.6s infinite; }
+    @keyframes penguinBlink { 0%, 46%, 54%, 100% { transform: translate(-50%, -50%) scaleY(1); } 50% { transform: translate(-50%, -50%) scaleY(0.1); } }
+      /* Only eyes should blink (override previous full-body blink) */
+    .center-penguin { animation: none; }
+    .center-penguin svg { width: clamp(64px, 12vw, 120px); height: auto; display: block; }
+    .lid { transform-box: fill-box; transform-origin: top center; animation: lidBlink 3.6s infinite; }
+    .lid.right { animation-delay: .06s; }
+    @keyframes lidBlink { 0%, 46%, 54%, 100% { transform: scaleY(0); } 50% { transform: scaleY(1); } }
+  </style>
+</head>
+<body>
+  <div class="container" aria-label="Angles Explorer">
+    <div class="topbar">
+      <div style="width:42px"></div>
+      <h1>🎯 Learn About Angles! 📐</h1>
+      <div class="penguin" id="penguin" title="Penguin helper" aria-label="Penguin helper">🐧</div>
+      <div class="penguin-speech" id="penguinSpeech"></div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="cnv"$1></canvas>
+      <div class="center-penguin" aria-hidden="true" title="Hi!">
+        <svg viewBox="0 0 120 140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cute penguin">
+          <g>
+            <!-- Body -->
+            <ellipse cx="60" cy="75" rx="40" ry="50" fill="#2b2b3a" />
+            <!-- Belly -->
+            <ellipse cx="60" cy="90" rx="28" ry="34" fill="#ffffff" />
+            <!-- Beak -->
+            <polygon points="60,64 68,70 52,70" fill="#f4a261" />
+            <!-- Left eye -->
+            <circle cx="45" cy="50" r="10" fill="#ffffff" />
+            <circle cx="45" cy="50" r="4" fill="#111" />
+            <rect class="lid left" x="35" y="40" width="20" height="20" fill="#2b2b3a" />
+            <!-- Right eye -->
+            <circle cx="75" cy="50" r="10" fill="#ffffff" />
+            <circle cx="75" cy="50" r="4" fill="#111" />
+            <rect class="lid right" x="65" y="40" width="20" height="20" fill="#2b2b3a" />
+            <!-- Feet -->
+            <ellipse cx="45" cy="120" rx="12" ry="6" fill="#f4a261" />
+            <ellipse cx="75" cy="120" rx="12" ry="6" fill="#f4a261" />
+            <!-- Flippers -->
+            <ellipse cx="25" cy="85" rx="8" ry="18" fill="#2b2b3a" transform="rotate(-14 25 85)" />
+            <ellipse cx="95" cy="85" rx="8" ry="18" fill="#2b2b3a" transform="rotate(14 95 85)" />
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="panel" aria-live="polite">
+      <div class="angle-display">Angle: <span id="angleDeg">0°</span> <span style="opacity:.9">|</span> <span id="angleRad">0 rad</span></div>
+      <div class="angle-type" id="angleType">Acute Angle</div>
+      <div class="desc" id="angleDesc">Drag from the center to rotate the red ray counterclockwise from 0°. Hold <b>Shift</b> to snap. Use ←/→ keys.</div>
+    </div>
+
+    <div class="controls">
+      <button class="chip" data-angle="0">0° (Zero)</button>
+      <button class="chip" data-angle="30">30°</button>
+      <button class="chip" data-angle="45">45°</button>
+      <button class="chip" data-angle="60">60°</button>
+      <button class="chip" data-angle="90">90° (Right)</button>
+      <button class="chip" data-angle="120">120°</button>
+      <button class="chip" data-angle="135">135°</button>
+      <button class="chip" data-angle="150">150°</button>
+      <button class="chip" data-angle="180">180° (Straight)</button>
+      <button id="animateBtn">🎬 Animate</button>
+      <button id="protractorBtn" aria-pressed="true">🧭 Protractor: On</button>
+      <button id="resetBtn">↺ Reset</button>
+    </div>
+
+    <div class="row">
+      <label for="speed">Animation duration (seconds): <span id="secVal">4</span></label>
+      <input id="speed" type="range" min="2" max="10" value="4" />
+      <label><input id="snapChk" type="checkbox" checked /> Snap to common angles</label>
+    </div>
+
+    <div class="fun" id="fun">💡 Fun Fact: A full circle has 360° because ancient astronomers approximated the year as 360 days.</div>
+
+    <div class="sr-live" aria-live="polite" id="live"></div>
+  </div>
+
+  <script>
+    // ===== Canvas setup with HiDPI support =====
+    const canvas = document.getElementById('cnv');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      // Map logical units to CSS pixels so drawing code can use CSS pixel coords
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }
+    if ('ResizeObserver' in window) { new ResizeObserver(() => resizeCanvas()).observe(canvas); } else { window.addEventListener('resize', resizeCanvas); setTimeout(resizeCanvas, 0); }
+
+    // ===== State =====
+    let currentAngle = 0; // degrees, 0..360
+    let animating = false; let rafId = null; let animStart = 0; let startAngle = 0; let targetAngle = 0; let animMs = 4000;
+    let dragging = false; let shiftSnap = false; let showProtractor = true;
+
+    // DOM refs
+    const angleDegEl = document.getElementById('angleDeg');
+    const angleRadEl = document.getElementById('angleRad');
+    const angleTypeEl = document.getElementById('angleType');
+    const angleDescEl = document.getElementById('angleDesc');
+    const funEl = document.getElementById('fun');
+    const liveEl = document.getElementById('live');
+    const penguin = document.getElementById('penguin');
+
+    const angleTypes = [
+      {min:0, max:0, name:"Zero Angle", desc:"0° means both rays overlap."},
+      {min:1, max:89, name:"Acute Angle", desc:"Less than 90°. Sharp and pointy!"},
+      {min:90, max:90, name:"Right Angle", desc:"Exactly 90°. A perfect corner."},
+      {min:91, max:179, name:"Obtuse Angle", desc:"Between 90° and 180°. Wider than a right angle."},
+      {min:180, max:180, name:"Straight Angle", desc:"Exactly 180°. Forms a straight line."},
+      {min:181, max:359, name:"Reflex Angle", desc:"Between 180° and 360°. More than half a circle."},
+      {min:360, max:360, name:"Full Rotation", desc:"360°. A complete turn!"}
+    ];
+
+    const funFacts = [
+      '💡 360° traces back to ancient calendars with ~360 days.',
+      '🌟 “Angle” comes from Latin “angulus”, meaning corner.',
+      '🔺 Angles in a triangle always add to 180°.',
+      '🛑 A regular octagon has interior angles of 135°.',
+      '🌈 Primary rainbows peak around a 42° deviation angle.',
+      '🍕 A typical pizza slice is roughly an acute angle (~45°).'
+    ];
+
+    const penguinMessages = ['Keep rotating! 🎯','Nice angle! ✨','Right angle next? 📐','Full spin = 360° 🔄','You\'re a pro! 🏆'];
+
+    function showPenguin(msg) {
+      const speech = document.getElementById('penguinSpeech');
+      speech.textContent = msg; speech.classList.add('show');
+      setTimeout(()=>speech.classList.remove('show'), 1800);
+    }
+
+    penguin.addEventListener('click', () => {
+      const msg = penguinMessages[Math.floor(Math.random()*penguinMessages.length)];
+      showPenguin(msg);
+    });
+
+    // ===== Helpers =====
+    function degToRad(d){ return d * Math.PI / 180 }
+    function radToDeg(r){ return r * 180 / Math.PI }
+    function clamp360(a){ a %= 360; if (a < 0) a += 360; return a }
+
+    function roundedRect(x,y,w,h,r){
+      // Safe rounded rect (avoids relying on ctx.roundRect availability)
+      ctx.beginPath();
+      ctx.moveTo(x+r, y);
+      ctx.lineTo(x+w-r, y);
+      ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+      ctx.lineTo(x+w, y+h-r);
+      ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+      ctx.lineTo(x+r, y+h);
+      ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+      ctx.lineTo(x, y+r);
+      ctx.quadraticCurveTo(x, y, x+r, y);
+      ctx.closePath();
+    }
+
+    function updateInfo(){
+      const a = Math.round(currentAngle);
+      angleDegEl.textContent = a + '°';
+      angleRadEl.textContent = (degToRad(currentAngle)).toFixed(2) + ' rad';
+
+      let info = angleTypes[0];
+      for (const t of angleTypes){ if (a>=t.min && a<=t.max){ info = t; break; } }
+      angleTypeEl.textContent = info.name;
+      angleDescEl.textContent = info.desc;
+      liveEl.textContent = `Angle ${a} degrees, ${info.name}`;
+    }
+
+    function maybeSnap(deg){
+      if (!document.getElementById('snapChk').checked && !shiftSnap) return deg;
+      const snaps = [0,15,30,45,60,75,90,105,120,135,150,165,180,195,210,225,240,255,270,285,300,315,330,345,360];
+      let best = deg, minDiff = 999;
+      for (const s of snaps){ const d = Math.abs(clamp360(deg) - (s%360)); if (d < minDiff){ minDiff = d; best = s; } }
+      return (minDiff <= 3) ? best : deg; // snap within 3°
+    }
+
+    // ===== Drawing =====
+    function draw(){
+      const w = canvas.clientWidth; const h = canvas.clientHeight;
+      const cx = w/2, cy = h/2; const R = Math.min(w,h)*0.38; const axisR = Math.min(w,h)*0.42;
+      ctx.clearRect(0,0,w,h);
+
+      // Subtle grid
+      ctx.save();
+      ctx.strokeStyle = 'rgba(102,126,234,.05)'; ctx.lineWidth = 1;
+      const grid = 20; for (let x=0; x<=w; x+=grid){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+      for (let y=0; y<=h; y+=grid){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      ctx.restore();
+
+      // Decorative concentric rings
+      ctx.save();
+      ctx.setLineDash([5,10]);
+      for (let r = 30; r <= R*1.1; r+= Math.max(22, R/5)){
+        const g = ctx.createRadialGradient(cx,cy, r-4, cx,cy, r+6);
+        g.addColorStop(0,'rgba(102,126,234,.05)'); g.addColorStop(.5,'rgba(118,75,162,.1)'); g.addColorStop(1,'rgba(240,87,108,.05)');
+        ctx.strokeStyle = g; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // Protractor ticks (bolder/high-contrast)
+      if (showProtractor){
+        ctx.save();
+        for (let d=0; d<360; d+=1){
+          const rad = -degToRad(d); // clockwise negative for canvas y-down
+          // Longer tick lengths for better visibility
+          const inner = axisR - (d%10===0?24:(d%5===0?16:10));
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(rad)*inner, cy + Math.sin(rad)*inner);
+          ctx.lineTo(cx + Math.cos(rad)*axisR,   cy + Math.sin(rad)*axisR);
+          // Darker and thicker strokes
+          const alpha = (d%10===0?0.70:(d%5===0?0.55:0.35));
+          ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+          ctx.lineWidth = (d%10===0?3:(d%5===0?2:1.25));
+          ctx.stroke();
+
+          // Degree labels every 30° with a tiny white pill for contrast
+          if (d%30===0){
+            const tx = cx + Math.cos(rad)*(axisR+18);
+            const ty = cy + Math.sin(rad)*(axisR+18);
+            const label = String(d);
+            ctx.font = 'bold 13px system-ui, sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            const w = ctx.measureText(label).width + 10; const h = 18;
+            ctx.save();
+            ctx.translate(tx, ty);
+            // keep label readable regardless of background
+            roundedRect(-w/2, -h/2, w, h, 9);
+            ctx.fillStyle = 'rgba(255,255,255,.95)';
+            ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1;
+            ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#111';
+            ctx.fillText(label, 0, 0);
+            ctx.restore();
+          }
+        }
+        ctx.restore();
+      }
+
+      // Angle sector (CCW from 0°)
+      if (currentAngle>0 && currentAngle<360){
+        const g = ctx.createRadialGradient(cx,cy,0,cx,cy,R*0.55);
+        g.addColorStop(0,'rgba(245,87,108,.36)'); g.addColorStop(1,'rgba(245,87,108,.12)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R*0.48, 0, -degToRad(currentAngle), true); ctx.closePath(); ctx.fill();
+        ctx.shadowColor = 'rgba(245,87,108,.5)'; ctx.shadowBlur = 10; ctx.strokeStyle = 'rgba(245,87,108,.85)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(cx,cy,R*0.48, 0, -degToRad(currentAngle), true); ctx.stroke(); ctx.shadowBlur = 0;
+      }
+
+      // Fixed baseline (0°) with arrow →
+      ctx.save();
+      ctx.strokeStyle = '#667eea'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(102,126,234,.3)'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx + axisR, cy); ctx.stroke();
+      ctx.fillStyle = '#667eea';
+      ctx.beginPath(); ctx.moveTo(cx + axisR + 10, cy); ctx.lineTo(cx + axisR - 6, cy - 8); ctx.lineTo(cx + axisR - 6, cy + 8); ctx.closePath(); ctx.fill();
+      ctx.restore();
+
+      // Rotating ray (CCW)
+      const rad = -degToRad(currentAngle);
+      const ex = cx + Math.cos(rad) * axisR;
+      const ey = cy + Math.sin(rad) * axisR;
+      const grad = ctx.createLinearGradient(cx,cy, ex,ey); grad.addColorStop(0, varGet('--accent1')); grad.addColorStop(1, varGet('--accent2'));
+      ctx.strokeStyle = grad; ctx.lineWidth = 5; ctx.shadowColor = 'rgba(245,87,108,.3)'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey); ctx.stroke(); ctx.shadowBlur = 0;
+
+      // Arrowhead for rotating ray
+      const arrLen = 14, arrAng = Math.PI/6; const tipX = cx + Math.cos(rad)*(axisR+8), tipY = cy + Math.sin(rad)*(axisR+8);
+      ctx.fillStyle = varGet('--accent2'); ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - arrLen*Math.cos(rad - arrAng), tipY - arrLen*Math.sin(rad - arrAng));
+      ctx.lineTo(tipX - arrLen*Math.cos(rad + arrAng), tipY - arrLen*Math.sin(rad + arrAng));
+      ctx.closePath(); ctx.fill();
+
+      // Center jewel
+      const cg = ctx.createRadialGradient(cx-2,cy-2,0,cx,cy,12); cg.addColorStop(0,'#fff'); cg.addColorStop(.35,'#a78bfa'); cg.addColorStop(.7,'#764ba2'); cg.addColorStop(1,'#581c87');
+      ctx.fillStyle = cg; ctx.shadowColor = 'rgba(118,75,162,.5)'; ctx.shadowBlur = 14; ctx.beginPath(); ctx.arc(cx,cy,10,0,Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+
+      // Angle label on arc midpoint
+      if (currentAngle>0 && currentAngle<360){
+        ctx.save();
+        const mid = -degToRad(currentAngle/2); const tR = R*0.62; const tx = cx + Math.cos(mid)*tR; const ty = cy + Math.sin(mid)*tR;
+        const text = Math.round(currentAngle) + '°'; const m = ctx.measureText(text);
+        roundedRect(tx - (m.width/2) - 8, ty - 12, m.width + 16, 24, 10);
+        ctx.fillStyle = 'rgba(255,255,255,.94)'; ctx.strokeStyle = 'rgba(245,87,108,.28)'; ctx.lineWidth = 2; ctx.fill(); ctx.stroke();
+        ctx.fillStyle = varGet('--accent2'); ctx.font = 'bold 18px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, tx, ty);
+        ctx.restore();
+      }
+
+      updateInfo();
+
+      function varGet(name){
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#ff0844';
+      }
+    }
+
+    // ===== Interaction (Pointer + Keyboard) =====
+    function posToAngle(clientX, clientY){
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left; const y = clientY - rect.top;
+      const cx = canvas.clientWidth/2, cy = canvas.clientHeight/2;
+      const rad = Math.atan2(cy - y, x - cx); // CCW from +x
+      let deg = clamp360(radToDeg(rad));
+      deg = maybeSnap(deg);
+      return clamp360(deg);
+    }
+
+    canvas.addEventListener('pointerdown', (e)=>{
+      dragging = true; canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging');
+      currentAngle = posToAngle(e.clientX, e.clientY); draw();
+    });
+    canvas.addEventListener('pointermove', (e)=>{
+      if(!dragging) return; currentAngle = posToAngle(e.clientX, e.clientY); draw();
+    });
+    canvas.addEventListener('pointerup', (e)=>{
+      dragging = false; canvas.releasePointerCapture(e.pointerId); canvas.classList.remove('dragging');
+      const a = Math.round(currentAngle);
+      if (a===90) showPenguin('Right angle! 90°! 🎯');
+      else if (a===180) showPenguin('Straight line! 180°! 📏');
+      else if (a===0 || a===360) showPenguin('Full circle! 360°! 🔄');
+    });
+
+    // Keyboard nudge
+    window.addEventListener('keydown', (e)=>{
+      if (e.key === 'Shift') shiftSnap = true;
+      if (e.key === 'ArrowRight'){ currentAngle = clamp360(currentAngle + (e.shiftKey?15:1)); draw(); }
+      if (e.key === 'ArrowLeft'){ currentAngle = clamp360(currentAngle - (e.shiftKey?15:1)); draw(); }
+      if (e.key === ' '){ e.preventDefault(); toggleAnimate(); }
+    });
+    window.addEventListener('keyup', (e)=>{ if (e.key === 'Shift') shiftSnap = false; });
+
+    // Buttons
+    document.querySelectorAll('button.chip[data-angle]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ setAngle(parseFloat(btn.dataset.angle)); });
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', ()=>{ stopAnim(); setAngle(0); });
+
+    const protractorBtn = document.getElementById('protractorBtn');
+    protractorBtn.addEventListener('click', ()=>{
+      showProtractor = !showProtractor; protractorBtn.textContent = showProtractor? '🧭 Protractor: On' : '🧭 Protractor: Off';
+      protractorBtn.setAttribute('aria-pressed', String(showProtractor)); draw();
+    });
+
+    const speed = document.getElementById('speed'); const secVal = document.getElementById('secVal');
+    speed.addEventListener('input', ()=>{ secVal.textContent = speed.value; animMs = parseInt(speed.value,10)*1000; });
+
+    document.getElementById('animateBtn').addEventListener('click', toggleAnimate);
+
+    function setAngle(a){ currentAngle = clamp360(a); draw(); }
+
+    function toggleAnimate(){
+      if (animating){ stopAnim(); return; }
+      animating = true; document.getElementById('animateBtn').textContent = '⏸ Pause';
+      startAngle = currentAngle; targetAngle = currentAngle + 360; animStart = performance.now();
+      funEl.textContent = funFacts[Math.floor(Math.random()*funFacts.length)];
+      showPenguin("Let's go! 🚀");
+      rafId = requestAnimationFrame(stepAnim);
+    }
+
+    function stopAnim(){
+      if (rafId) cancelAnimationFrame(rafId); rafId = null; animating = false; document.getElementById('animateBtn').textContent = '🎬 Animate';
+      currentAngle = clamp360(currentAngle); draw();
+    }
+
+    function stepAnim(t){
+      const elapsed = t - animStart; const p = Math.min(1, elapsed/animMs); const ease = 1 - Math.pow(1 - p, 3);
+      currentAngle = startAngle + (targetAngle - startAngle) * ease; draw();
+      if (p < 1 && animating){ rafId = requestAnimationFrame(stepAnim); } else { stopAnim(); }
+    }
+
+    // Initial
+    resizeCanvas(); // triggers draw via observer
+  </script>
+</body>
+</html>
