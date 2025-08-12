@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simple Pendulum</title>
+  <style>
+    :root { --bg:#0b1021; --panel:#ffffff; --ink:#0f172a; }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 600px at 50% -20%, #1f2a6a33, transparent), var(--bg);
+      color:#e5e7eb; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px;
+    }
+    .wrap{width:min(1100px,100%); display:grid; grid-template-columns: 1fr 320px; gap:16px}
+    @media (max-width: 900px){ .wrap{ grid-template-columns: 1fr; } }
+    .panel{
+      background: #0f172a; border:1px solid #233266; border-radius:18px; padding:14px 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    h1{font-size:20px; margin:0 0 6px 0}
+    label{display:block; font-size:13px; margin:8px 0 4px; color:#cbd5e1}
+    input[type=range]{width:100%}
+    .readout{font-size:13px; color:#a5b4fc}
+    canvas{width:100%; height:auto; background: radial-gradient(800px 400px at 50% -10%, #15214b, #0b1021); border-radius:16px; display:block}
+    .meta{font-size:13px; line-height:1.5; color:#cbd5e1}
+    .meta code{background:#111827; color:#a7f3d0; padding:2px 6px; border-radius:6px}
+    .badge{display:inline-block; font-size:12px; background:#1d4ed8; color:#fff; padding:4px 8px; border-radius:999px; margin-bottom:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <div class="badge">Simple Pendulum</div>
+      <h1>Adjust parameters and press Play</h1>
+      <canvas id="sim" width="800" height="500"></canvas>
+      <div class="meta">
+        <p><strong>Model:</strong> Small-angle approximation θ(t) = θ₀ cos(√(g/L) · t).</p>
+        <p><strong>Torque view:</strong> τ = −m g L sin(θ) (visual only; dynamics use small-angle for stability).</p>
+      </div>
+    </div>
+    <div class="panel">
+      <label>Length L (m): <span class="readout" id="Lro">1.00</span></label>
+      <input id="L" type="range" min="0.2" max="2.5" value="1.0" step="0.01" />
+      <label>Gravity g (m/s²): <span class="readout" id="gro">9.81</span></label>
+      <input id="g" type="range" min="0.5" max="20" value="9.81" step="0.01" />
+      <label>Initial angle θ₀ (deg): <span class="readout" id="thro">20</span></label>
+      <input id="th0" type="range" min="1" max="60" value="20" step="1" />
+      <label>Show force/torque helpers</label>
+      <input id="helpers" type="checkbox" checked />
+      <div style="height:10px"></div>
+      <button id="play">▶ Play</button>
+      <button id="pause">⏸ Pause</button>
+      <button id="reset">⟲ Reset</button>
+      <div style="height:10px"></div>
+      <div class="meta">
+        <p><strong>Tips</strong></p>
+        <ul>
+          <li>Works offline once loaded. Mobile-friendly.</li>
+          <li>All code is static HTML/JS/CSS → perfect for GitHub Pages.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('sim');
+    const ctx = canvas.getContext('2d');
+    const L = document.getElementById('L');
+    const g = document.getElementById('g');
+    const th0 = document.getElementById('th0');
+    const helpers = document.getElementById('helpers');
+    const Lro = document.getElementById('Lro');
+    const gro = document.getElementById('gro');
+    const thro = document.getElementById('thro');
+    const playBtn = document.getElementById('play');
+    const pauseBtn = document.getElementById('pause');
+    const resetBtn = document.getElementById('reset');
+
+    let running = false;
+    let t0 = 0;
+    let theta0 = toRad(th0.value);
+    let Lm = parseFloat(L.value);
+    let gg = parseFloat(g.value);
+    let t = 0;
+
+    function toRad(deg){ return deg * Math.PI/180; }
+
+    function updateReadouts(){
+      Lro.textContent = (+L.value).toFixed(2);
+      gro.textContent = (+g.value).toFixed(2);
+      thro.textContent = (+th0.value);
+    }
+    updateReadouts();
+
+    L.addEventListener('input', ()=>{ Lm = +L.value; updateReadouts(); });
+    g.addEventListener('input', ()=>{ gg = +g.value; updateReadouts(); });
+    th0.addEventListener('input', ()=>{ theta0 = toRad(+th0.value); updateReadouts(); });
+
+    playBtn.onclick = ()=>{ running = true; };
+    pauseBtn.onclick = ()=>{ running = false; };
+    resetBtn.onclick = ()=>{ t = 0; running = false; };
+
+    function draw(){
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0,0,w,h);
+
+      // origin
+      const ox = w/2, oy = 100;
+      const rpx = 6; // bob radius
+
+      // physics (small-angle)
+      const omega = Math.sqrt(gg / Lm);
+      const theta = theta0 * Math.cos(omega * t);
+
+      // cartesian
+      const scale = 160; // pixels per meter
+      const x = ox + Lm * scale * Math.sin(theta);
+      const y = oy + Lm * scale * Math.cos(theta);
+
+      // string
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#a5b4fc";
+      ctx.beginPath();
+      ctx.moveTo(ox, oy);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+
+      // pivot
+      ctx.fillStyle = "#e2e8f0";
+      ctx.beginPath();
+      ctx.arc(ox, oy, 5, 0, Math.PI*2);
+      ctx.fill();
+
+      // bob
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(x, y, 14, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = "#0ea5e9";
+      ctx.stroke();
+
+      // helpers
+      if(helpers.checked){
+        // angle arc
+        ctx.strokeStyle = "#f472b6";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ox, oy, 40, -Math.PI/2, -Math.PI/2 + theta, theta>0);
+        ctx.stroke();
+
+        // gravity vector at bob
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + 60);
+        ctx.stroke();
+
+        // tangential direction arrow (direction of motion)
+        const dir = -Math.sign(Math.sin(omega * t)) || 1;
+        const tx = x + 40 * Math.cos(theta + Math.PI/2);
+        const ty = y + 40 * Math.sin(theta + Math.PI/2);
+        ctx.strokeStyle = "#34d399";
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+      }
+
+      // HUD text
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      ctx.fillText(`θ = ${(theta*180/Math.PI).toFixed(1)}°`, 16, 24);
+      ctx.fillText(`L = ${Lm.toFixed(2)} m`, 16, 44);
+      ctx.fillText(`g = ${gg.toFixed(2)} m/s²`, 16, 64);
+      ctx.fillText(`t = ${t.toFixed(2)} s`, 16, 84);
+
+      if(running) t += 1/60;
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+</body>
+</html>
